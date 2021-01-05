@@ -1,4 +1,5 @@
-from flask import Flask, render_template
+from flask import (Flask, render_template, jsonify, request, redirect,
+                   url_for)
 import requests
 import subprocess
 import shutil
@@ -8,6 +9,9 @@ from helpers import make_celery, make_sure_path_exists
 import zc.lockfile
 from pathlib import Path
 from distutils.dir_util import copy_tree
+from typing import NamedTuple, Optional
+from datetime import datetime
+from tzlocal import get_localzone
 
 app = Flask(__name__)
 
@@ -36,8 +40,15 @@ def get_repo_size(username, repo):
         raise RepoError("Repo not found")
     return int(r.json()['size'])
 
+BuildStatus = NamedTuple('BuildStatus', (('status', str),
+                                         ('log', Optional[str]),
+                                         ('timestamp',
+                                          Optional[str]),
+                                         ('url', Optional[str])))
+
 class BookBuilder(object):
-    def __init__(self, book_id: str, service: str, base_url: str) -> None:
+    def __init__(self, book_id: str, service: str,
+                 base_url: str=None) -> None:
         self.service = service
         self.base_url = base_url
         self.book_id = book_id
@@ -65,15 +76,65 @@ class BookBuilder(object):
         return f"BookBuilder({self.service}/{self.book_id} " \
                f"-> {self.base_url})"
 
+    def status(self) -> BuildStatus:
+        tz = get_localzone()
+
+        url = None
+
+        if self.logfile().exists():
+            with open(self.logfile()) as file:
+                log = file.read()
+            timestamp: datetime = tz.localize(
+                datetime.fromtimestamp(
+                    os.path.getmtime(self.logfile())))
+        else:
+            log = None
+            timestamp = None
+        if self.lockfile().exists():
+            status = 'in-progress'
+        else:
+            if log and 'SUCCESS' in log:
+                status = 'complete'
+                url = self.base_url
+            elif log and 'FAILED' in log:
+                status = 'failed'
+            else:
+                status = 'unkown'
+
+        return BuildStatus(status, log, timestamp.isoformat(), url)
+
+
 
 class GithubBookBuilder(BookBuilder):
     def repo_url(self) -> str:
         return github_url + self.book_id
 
+@app.route('/', methods=['GET', 'POST'])
+def showform():
+    if request.method == 'GET':
+        return render_template("index.html")
+    else:
+        url = request.form.get('url')
+        m = re.match(r"((https?://)?github.com/)?(\w+)/(\w+)", url)
+        if m:
+            _, _, username, repo = m.groups()
+            return redirect(url_for("update_github", username=username,
+                                    repo=repo))
+        return render_template("index.html", message="Incorrect URL")
+
+
+@app.route('/update/github/<string:username>/<string:repo>/status/json')
+def update_github_status_json(username, repo):
+    builder = GithubBookBuilder(book_id=username + "/" + repo,
+                                service="github",
+                                base_url=app.config['BASEURL_PREFIX_GH'] +
+                                          username + '/' + repo)
+    return jsonify(builder.status()._asdict())
 
 @app.route('/update/github/<string:username>/<string:repo>/status')
 def update_github_status(username, repo):
-    pass
+    return render_template("status.html",
+                    username=username, repo=repo)
 
 @app.route('/update/github/<string:username>/<string:repo>/')
 def update_github(username, repo):
@@ -89,18 +150,15 @@ def update_github(username, repo):
 
     builder = GithubBookBuilder(book_id=username + "/" + repo,
                                 service="github",
-                                base_url="http://pub.mathbook.info/github/"
-                                         + username + "/" + repo)
+                                base_url=app.config['BASEURL_PREFIX_GH'] +
+                                         username + "/" + repo)
 
-    if os.path.isfile(builder.lockfile()):
-        return render_template("index.html",
-                               message="It's already updating")
-
-    do_update_github.apply_async(args=[builder],
+    if not builder.lockfile().exists():
+        do_update_github.apply_async(args=[builder],
                                  serializer='pickle')
 
-    return render_template("index.html",
-                           message="Okay, updating")
+    return redirect(url_for('update_github_status',
+                    username=username, repo=repo))
 
 
 @celery.task()
@@ -142,6 +200,7 @@ def do_update_github(builder: BookBuilder) -> None:
                 except subprocess.CalledProcessError as e:
                     if 'already exists' in e.output:
                         shutil.rmtree(str(clonedir))
+                        make_sure_path_exists(clonedir)
                         log_and_check_output([git, "clone", builder.repo_url(),
                                               './'], cwd=clonedir)
 
@@ -158,13 +217,17 @@ def do_update_github(builder: BookBuilder) -> None:
                                     cwd=str(clonedir))
             retcode = proc.wait()
             if retcode:
-                print("Process terminated with non-zero status", file=log)
+                raise Exception("FAILED: Process terminated with "
+                                "non-zero status")
+
+            copy_tree(str(clonedir / "build"), str(builder.outputdir()))
+            print("SUCCESS", file=log)
+        except Exception as e:
+            print("FAILED: Something went wrong:", e, file=log)
         finally:
             print("Removing lock")
             lock.close()
             builder.lockfile().unlink()
-    copy_tree(str(clonedir / "build"), str(builder.outputdir()))
-
 
 if __name__ == '__main__':
     app.run()

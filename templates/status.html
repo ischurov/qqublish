@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Publish your mathbook</title>
+</head>
+<body>
+    <!-- Latest compiled and minified CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+
+    <!-- Optional theme -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css" integrity="sha384-rHyoN1iRsVXV4nD0JutlnGaslCJuC7uwjduW9SVrLvRYooPp2bWYgmgJQIXwl/Sp" crossorigin="anonymous">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <style>
+        #log {
+            max-height: 60vh;
+            overflow: scroll;
+        }
+    </style>
+    <div class="container">
+    <div class="row">
+        <div class="col-md-8 col-md-offset-2">
+            <h1>Update status</h1>
+            <ol class="breadcrumb">
+                <li>mathbook.info</li>
+                <li>github</li>
+                <li>{{ username }}</li>
+                <li>{{ repo }}</li>
+            </ol>
+            <h2 id="status" class="text-center"></h2>
+                <pre id="log"></pre>
+        </div>
+        </div>
+    </div>
+</div>
+<script src="https://code.jquery.com/jquery-3.2.1.min.js"   integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="   crossorigin="anonymous"></script>
+{%  if username and repo %}
+    <script>
+    status_url = '{{ url_for("update_github_status_json",
+                             username=username,
+                             repo=repo) }}';
+    </script>
+{% endif %}
+<script>
+function update_status() {
+        $.getJSON(status_url, process_status);
+    }
+function process_status(status) {
+    var  status_div = $("#status");
+    var  log_pre = $("#log");
+
+    if (status.status === 'unknown') {
+        status.status = 'in-progress';
+    }
+    statuses = {
+        'in-progress': '<i class="fa fa-spinner fa-spin" ' +
+            'style="font-size:24px"></i>',
+        'complete': "<a href='" + status.url + "'>your book</a><br/>" +
+            '<span class="glyphicon glyphicon-ok" ' +
+            'aria-hidden="true"></span>',
+        'failed': '<span class="glyphicon glyphicon-remove" ' +
+            'aria-hidden="true"></span>',
+        'unknown': '<span class="glyphicon glyphicon-question-sign" ' +
+            'aria-hidden="true"></span>'
+    };
+    if (status_div.data("status") !== status.status) {
+        status_div.html(status.status + "<br/>" +
+        statuses[status.status]);
+        status_div.data("status", status.status)
+    }
+
+    log_pre.html(status.log);
+    setTimeout(update_status, 1000)
+}
+$(function() {
+    if (status_url) {
+
+        update_status()
+    }
+})
+</script>
+</body>
+</html>

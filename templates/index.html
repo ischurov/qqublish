@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Publish your mathbook</title>
+</head>
+<body>
+    <!-- Latest compiled and minified CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+
+    <!-- Optional theme -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css" integrity="sha384-rHyoN1iRsVXV4nD0JutlnGaslCJuC7uwjduW9SVrLvRYooPp2bWYgmgJQIXwl/Sp" crossorigin="anonymous">
+<style>
+    .vertical-align {
+    display: flex;
+    align-items: center;
+}
+</style>
+<div class="container">
+    <div class="row">
+        <div class="col-md-8 col-md-offset-2 vertical-align" style="height: 100vh;">
+            <div style="text-align: center">
+            <form method="POST">
+                <input type="text" size="80" name="url"  placeholder="yourname/repo | https://github.com/yourname/repo">
+                <input type="submit" value="Render">
+            </form>
+
+            <p style="font-size:80%" class="text-muted">Put your <a href="https://github.com/ischurov/qqmbr">qqmbr-based</a> mathbook sources to Github and give me a link.</p>
+                {%  if message %}
+                <p>{{ message }}</p>
+                {%  endif %}
+        </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

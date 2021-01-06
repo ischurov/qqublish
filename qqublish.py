@@ -114,16 +114,26 @@ class GithubBookBuilder(BookBuilder):
 
 
 @app.route("/", methods=["GET", "POST"])
-def showform():
+def process_root():
     if request.method == "GET":
         return render_template("index.html")
     else:
         url = request.form.get("url")
         m = re.match(r"((https?://)?github.com/)?([\w-]+)/([\w-]+)", url)
-        if m:
-            _, _, username, repo = m.groups()
-            return redirect(url_for("update_github", username=username, repo=repo))
-        return render_template("index.html", message="Incorrect URL")
+        if not m:
+            return render_template("index.html", message="Incorrect URL")
+        _, _, username, repo = m.groups()
+        try:
+            size = get_repo_size(username, repo)
+        except RepoError:
+            return render_template("index.html",
+                                   message="There's no such repo")
+
+        if size > app.config["MAX_SIZE"]:
+            return render_template("index.html",
+                                   message="Repo size is too large")
+
+        return update_github(username=username, repo=repo)
 
 
 @app.route("/update/github/<string:username>/<string:repo>/status/json")
@@ -140,17 +150,7 @@ def update_github_status_json(username, repo):
 def update_github_status(username, repo):
     return render_template("status.html", username=username, repo=repo)
 
-
-@app.route("/update/github/<string:username>/<string:repo>/")
 def update_github(username, repo):
-    try:
-        size = get_repo_size(username, repo)
-    except RepoError:
-        return render_template("index.html", message="There's no such repo")
-
-    if size > app.config["MAX_SIZE"]:
-        return render_template("index.html", message="Repo size is too large")
-
     builder = GithubBookBuilder(
         book_id=username + "/" + repo,
         service="github",

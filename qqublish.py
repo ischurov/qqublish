@@ -120,7 +120,7 @@ def process_root():
         return render_template("index.html")
     else:
         url = request.form.get("url")
-        m = re.match(r"((https?://)?github.com/)?([\w-]+)/([\w-]+)", url)
+        m = re.match(r"((https?://)?github.com/)?([\w.-]+)/([\w.-]+)", url)
         if not m:
             return render_template("index.html", message="Incorrect URL")
         _, _, username, repo = m.groups()

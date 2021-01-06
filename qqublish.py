@@ -11,6 +11,7 @@ from distutils.dir_util import copy_tree
 from typing import NamedTuple, Optional
 from datetime import datetime
 from tzlocal import get_localzone
+import json
 
 app = Flask(__name__)
 
@@ -126,12 +127,10 @@ def process_root():
         try:
             size = get_repo_size(username, repo)
         except RepoError:
-            return render_template("index.html",
-                                   message="There's no such repo")
+            return render_template("index.html", message="There's no such repo")
 
         if size > app.config["MAX_SIZE"]:
-            return render_template("index.html",
-                                   message="Repo size is too large")
+            return render_template("index.html", message="Repo size is too large")
 
         return update_github(username=username, repo=repo)
 
@@ -150,6 +149,7 @@ def update_github_status_json(username, repo):
 def update_github_status(username, repo):
     return render_template("status.html", username=username, repo=repo)
 
+
 def update_github(username, repo):
     builder = GithubBookBuilder(
         book_id=username + "/" + repo,
@@ -161,6 +161,14 @@ def update_github(username, repo):
         do_update_github.apply_async(args=[builder], serializer="pickle")
 
     return redirect(url_for("update_github_status", username=username, repo=repo))
+
+
+def mkfooter(src_url):
+    return f"""
+    <p>Этот материал опубликован с помощью сервиса <a class='text-muted' href="http://publish.mathbook.info/">publish.mathbook.info</a>, исходные коды находятся <a class='text-muted' href="{src_url}">здесь</a>.</p>
+    <p>Сайт <a class='text-muted' href="http://mathbook.info/">mathbook.info</a> не имеет отношения к автору этого материала.</p>
+    <p>Хотите опубликовать свою книгу или статью в веб-формате? <a class='text-muted' href="http://publish.mathbook.info/">Это просто!</a></p>
+    """
 
 
 @celery.task()
@@ -223,6 +231,8 @@ def do_update_github(builder: BookBuilder) -> None:
                 "--base-url",
                 builder.base_url,
                 "--copy-mathjax",
+                "--template_options",
+                json.dumps({"footer": mkfooter(builder.repo_url())}),
             ]
 
             print("Let's try")

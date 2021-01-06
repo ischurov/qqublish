@@ -119,7 +119,7 @@ def showform():
         return render_template("index.html")
     else:
         url = request.form.get("url")
-        m = re.match(r"((https?://)?github.com/)?(\w+)/(\w+)", url)
+        m = re.match(r"((https?://)?github.com/)?([\w-]+)/([\w-]+)", url)
         if m:
             _, _, username, repo = m.groups()
             return redirect(url_for("update_github", username=username, repo=repo))
@@ -210,7 +210,6 @@ def do_update_github(builder: BookBuilder) -> None:
                         )
 
             commands = [
-                "sudo",
                 "docker",
                 "run",
                 "--rm",
@@ -223,6 +222,7 @@ def do_update_github(builder: BookBuilder) -> None:
                 "build",
                 "--base-url",
                 builder.base_url,
+                "--copy-mathjax",
             ]
 
             print("Let's try")
